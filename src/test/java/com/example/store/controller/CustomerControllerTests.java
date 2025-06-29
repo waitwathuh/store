@@ -1,8 +1,9 @@
 package com.example.store.controller;
 
+import com.example.store.dto.CustomerDTO;
 import com.example.store.entity.Customer;
 import com.example.store.mapper.CustomerMapper;
-import com.example.store.repository.CustomerRepository;
+import com.example.store.service.CustomerService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -31,20 +32,28 @@ class CustomerControllerTests {
     private ObjectMapper objectMapper;
 
     @MockitoBean
-    private CustomerRepository customerRepository;
+    private CustomerService customerService;
+
+    @MockitoBean
+    private CustomerMapper customerMapper;
 
     private Customer customer;
+    private CustomerDTO customerDTO;
 
     @BeforeEach
     void setUp() {
         customer = new Customer();
         customer.setName("John Doe");
         customer.setId(1L);
+
+        customerDTO = new CustomerDTO();
+        customerDTO.setName("John Doe");
+        customerDTO.setId(1L);
     }
 
     @Test
     void testCreateCustomer() throws Exception {
-        when(customerRepository.save(customer)).thenReturn(customer);
+        when(customerService.createCustomer(customer)).thenReturn(customerDTO);
 
         mockMvc.perform(post("/customer")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -55,11 +64,21 @@ class CustomerControllerTests {
 
     @Test
     void testGetAllCustomers() throws Exception {
-        when(customerRepository.findAll()).thenReturn(List.of(customer));
+        when(customerService.getAllCustomers()).thenReturn(List.of(customerDTO));
 
         mockMvc.perform(get("/customer"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$..name").value("John Doe"));
-        ;
+    }
+
+    @Test
+    void testSearchCustomers() throws Exception {
+        String query = "John";
+
+        when(customerService.getCustomersByNameQuery(query)).thenReturn(List.of(customerDTO));
+
+        mockMvc.perform(get("/customer?name=" + query))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$..name").value("John Doe"));
     }
 }
