@@ -1,0 +1,7 @@
+databaseChangeLog:
+  - changeSet:
+      id: 3-schema-products-add
+      author: wait.wat.huh@gmail.com
+      changes:
+        - sqlFile:
+            path: db/changelog/schema-products-add.sql

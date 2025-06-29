@@ -1,0 +1,7 @@
+databaseChangeLog:
+  - changeSet:
+      id: 4-schema-index-add
+      author: wait.wat.huh@gmail.com
+      changes:
+        - sqlFile:
+            path: db/changelog/schema-index-add.sql
