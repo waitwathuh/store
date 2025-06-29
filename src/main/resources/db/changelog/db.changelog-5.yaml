@@ -1,0 +1,7 @@
+databaseChangeLog:
+  - changeSet:
+      id: 5-data-updates
+      author: wait.wat.huh@gmail.com
+      changes:
+        - sqlFile:
+            path: db/changelog/data-updates.sql
