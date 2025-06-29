@@ -26,12 +26,12 @@ public class OrderServiceImpl implements OrderService {
     public OrderDTO getOrderById(Long orderId) {
         Optional<Order> order = orderRepository.findById(orderId);
 
-        if (order.isPresent()) {
-            return orderMapper.orderToOrderDTO(order.get());
-        } else {
+        if (order.isEmpty()) {
             String message = String.format("Order with orderId %s not found", orderId);
             log.warn(message);
             throw new NotFoundException(message);
+        } else {
+            return orderMapper.orderToOrderDTO(order.get());
         }
     }
 

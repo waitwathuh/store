@@ -2,6 +2,7 @@ package com.example.store.controller;
 
 import com.example.store.dto.CustomerDTO;
 import com.example.store.entity.Customer;
+import com.example.store.exception.NotFoundException;
 import com.example.store.mapper.CustomerMapper;
 import com.example.store.service.CustomerService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -72,6 +73,17 @@ class CustomerControllerTests {
     }
 
     @Test
+    void testGetCustomerById() throws Exception {
+        Long customerId = customer.getId();
+
+        when(customerService.getCustomerById(customerId)).thenReturn(customerDTO);
+
+        mockMvc.perform(get("/customer/" + customerId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("John Doe"));
+    }
+
+    @Test
     void testSearchCustomers() throws Exception {
         String query = "John";
 
@@ -80,5 +92,31 @@ class CustomerControllerTests {
         mockMvc.perform(get("/customer?name=" + query))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$..name").value("John Doe"));
+    }
+
+    @Test
+    void testGetCustomerByIdNotFound() throws Exception {
+        Long customerId = customer.getId();
+        String message = String.format("No customer with id '%s' was found", customerId);
+
+        when(customerService.getCustomerById(customerId)).thenThrow(new NotFoundException(message));
+
+        mockMvc.perform(get("/customer/" + customerId))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status").value("Bad Request"))
+                .andExpect(jsonPath("$.message").value(message));
+    }
+
+    @Test
+    void testSearchCustomersNotFound() throws Exception {
+        String query = "John";
+        String message = String.format("No customer name with query '%s' was found", query);
+
+        when(customerService.getCustomersByNameQuery(query)).thenThrow(new NotFoundException(message));
+
+        mockMvc.perform(get("/customer?name=" + query))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status").value("Bad Request"))
+                .andExpect(jsonPath("$.message").value(message));
     }
 }

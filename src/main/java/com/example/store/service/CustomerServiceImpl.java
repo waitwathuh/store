@@ -12,6 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Optional;
 
 @Service
 @AllArgsConstructor
@@ -27,9 +28,16 @@ public class CustomerServiceImpl implements CustomerService {
     }
 
     @Override
-    public CustomerDTO getCustomerById(Long id) {
-        return customerMapper.customerToCustomerDTO(
-                customerRepository.findById(id).orElse(null));
+    public CustomerDTO getCustomerById(Long customerId) {
+        Optional<Customer> customerDTO = customerRepository.findById(customerId);
+
+        if (customerDTO.isEmpty()) {
+            String message = String.format("No customer with id '%s' was found", customerId);
+            log.warn(message);
+            throw new NotFoundException(message);
+        } else {
+            return customerMapper.customerToCustomerDTO(customerDTO.get());
+        }
     }
 
     @Override

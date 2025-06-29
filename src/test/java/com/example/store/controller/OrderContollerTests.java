@@ -5,6 +5,7 @@ import com.example.store.dto.OrderCustomerDTO;
 import com.example.store.dto.OrderDTO;
 import com.example.store.entity.Customer;
 import com.example.store.entity.Order;
+import com.example.store.exception.NotFoundException;
 import com.example.store.mapper.CustomerMapper;
 import com.example.store.service.CustomerService;
 import com.example.store.service.OrderService;
@@ -106,5 +107,18 @@ class OrderControllerTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.description").value("Test Order"))
                 .andExpect(jsonPath("$..customer.name").value("John Doe"));
+    }
+
+    @Test
+    void testGetOrderByIdNotFound() throws Exception {
+        Long orderId = order.getId();
+        String message = String.format("Order with orderId %s not found", orderId);
+
+        when(orderService.getOrderById(orderId)).thenThrow(new NotFoundException(message));
+
+        mockMvc.perform(get("/order/" + orderId))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status").value("Bad Request"))
+                .andExpect(jsonPath("$.message").value(message));
     }
 }
