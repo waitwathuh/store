@@ -13,13 +13,11 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -62,8 +60,8 @@ public class CustomerServiceImplTests {
 
     @Test
     void testGetAllCustomers() {
-        List<Customer> customers = Arrays.asList(customerA, customerB);
-        List<CustomerDTO> expectedCustomerDTOs = Arrays.asList(customerDTOA, customerDTOB);
+        List<Customer> customers = List.of(customerA, customerB);
+        List<CustomerDTO> expectedCustomerDTOs = List.of(customerDTOA, customerDTOB);
 
         when(customerRepository.findAll()).thenReturn(customers);
         when(customerMapper.customersToCustomerDTOs(customers)).thenReturn(expectedCustomerDTOs);
@@ -127,7 +125,7 @@ public class CustomerServiceImplTests {
     @Test
     void testCreateCustomer() {
         when(customerRepository.save(customerA)).thenReturn(customerA);
-        when(customerMapper.customerToCustomerDTO(any(Customer.class))).thenReturn(customerDTOA);
+        when(customerMapper.customerToCustomerDTO(customerA)).thenReturn(customerDTOA);
 
         CustomerDTO actualCustomerDTO = customerServiceImpl.createCustomer(customerA);
 
