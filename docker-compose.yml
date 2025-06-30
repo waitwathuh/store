@@ -1,0 +1,60 @@
+services:
+  store:
+    build: .
+    container_name: store
+    restart: always
+    environment:
+      - DB_USERNAME=admin
+      - DB_PASSWORD=admin
+      - DB_HOST=postgres
+      - DB_PORT=5433
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - SPRING_DATA_REDIS_HOST=redis
+      - SPRING_DATA_REDIS_PORT=6379
+    ports:
+      - "8080:8080"
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - store-network
+  postgres:
+    container_name: postgres
+    restart: always
+    environment:
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin
+      - POSTGRES_DB=store
+    volumes:
+      - postgres:/var/lib/postgresql/data
+    ports:
+      - "5433:5433"
+    image: postgres:16.2
+    command: postgres -c 'port=5433' -c wal_level=logical
+    networks:
+      - store-network
+    healthcheck:
+      test: ["CMD", "pg_isready", "-h", "localhost", "-p", "5433"]
+      interval: 10s
+      retries: 5
+  redis:
+    image: redis:8.2-m01-bookworm
+    ports:
+      - "6379:6379"
+    networks:
+      - store-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      retries: 5
+volumes:
+  postgres:
+    external: false
+    name: postgres
+
+networks:
+  store-network:
+    driver: bridge

@@ -1,19 +1,36 @@
 # Store Application
-The Store application keeps track of customers and orders in a database.
 
-# Assumptions
-This README assumes you're using a posix environment. It's possible to run this on Windows as well:
-* Instead of `./gradlew` use `gradlew.bat`
-* The syntax for creating the Docker container is different. You could also install PostgreSQL on bare metal if you prefer
+The **Store** application is a Spring Boot service that keeps track of **customers, orders and products** in a PostgreSQL database. To minimise database round‑trips in production it uses **Redis** as a second‑level cache.
 
+---
 
-# Prerequisites
-This service assumes the presence of a postgresql 16.2 database server running on localhost:5433 (note the non-standard port)
-It assumes a username and password `admin:admin` can be used.
-It assumes there's already a database called `store`
+## Table of contents
 
-You can start the PostgreSQL instance like this:
-```shell
+1. [Prerequisites](#prerequisites)
+2. [Getting started](#getting-started)
+3. [Environment variables](#environment-variables)
+4. [Running the application](#running-the-application)
+5. [Data model](#data-model)
+6. [REST API](#rest-api)
+7. [Performance / caching](#performance--caching)
+8. [Development tasks](#development-tasks)
+
+---
+
+## Prerequisites
+
+| Component      | Version                        | Notes                                    |
+| -------------- | ------------------------------ | ---------------------------------------- |
+| **Java**       | 17                             | Compile & run the app                    |
+| **Gradle**     | Wrapper included (`./gradlew`) |                                          |
+| **PostgreSQL** | 16.2                           | Exposed on **localhost:5433**            |
+| **Redis**      | ≥ 7.0                          | Exposed on **localhost:6379**            |
+| **Docker**     | Optional                       | Quickest way to spin up Postgres & Redis |
+
+### Spin‑up the infrastructure with Docker
+
+```bash
+# PostgreSQL (non‑standard port 5433, logical decoding enabled for Liquibase):
 docker run -d \
   --name postgres \
   --restart always \
@@ -24,49 +41,183 @@ docker run -d \
   -p 5433:5432 \
   postgres:16.2 \
   postgres -c wal_level=logical
+
+# Redis (persistent volume, default port):
+docker run -d \
+  --name redis \
+  --restart always \
+  -v redis-data:/data \
+  -p 6379:6379 \
+  redis:7-alpine
 ```
 
-# Running the application
-You should be able to run the service using
-```shell
+> **Tip:** If Docker isn’t available, you can run both services natively and keep the same ports.
+
+---
+
+## Getting started
+
+Clone the repo and ***clean‑build*** to avoid stale class files:
+
+```bash
+git clone <repo-url>
+cd store-app
+./gradlew clean build
+```
+
+---
+
+## Environment variables
+
+The app can be customised without editing `application.yml`:
+
+| Variable                 | Default     | Description                  |
+| ------------------------ | ----------- | ---------------------------- |
+| `DB_HOST`                | `localhost` | PostgreSQL host              |
+| `DB_PORT`                | `5433`      | PostgreSQL port              |
+| `DB_USERNAME`            | `admin`     |                              |
+| `DB_PASSWORD`            | `admin`     |                              |
+| `REDIS_HOST`             | `localhost` |                              |
+| `REDIS_PORT`             | `6379`      |                              |
+| `SPRING_PROFILES_ACTIVE` |             | Attach extra config profiles |
+
+---
+
+## Running the application
+
+### Local development
+
+```bash
 ./gradlew bootRun
 ```
 
-The application uses Liquibase to migrate the schema. Some sample data is provided. You can create more data by reading the documentation in utils/README.md
+### Packaged jar
 
-# Data model
-An order has an ID, a description, and is associated with the customer which made the order.
-A customer has an ID, a name, and 0 or more orders.
+```bash
+./gradlew bootJar
+java -jar build/libs/store-*.jar
+```
 
-# API
-Two endpoints are provided:
-   * /order
-   * /customer
+### Docker image (CI friendly)
 
-Each of them supports a POST and a GET. The data model is circular - a customer owns a number of orders, and that order necessarily refers back to the customer which owns it.
-To avoid loops in the serializer, when writing out a Customer or an Order, they're mapped to CustomerDTO and OrderDTO which contain truncated versions of the dependent object - CustomerOrderDTO and OrderCustomerDTO respectively.
+A multi‑stage Dockerfile is included. Build & run:
 
-The API is documented in the OpenAPI file OpenAPI.yaml. Note that this spec includes part of one of the tasks below (the new /products endpoint)
+```bash
+docker build -t store-app:latest .
+docker run --rm -p 8080:8080 --network host store-app:latest
+```
 
-# Tasks
+Liquibase migrates the schema on start‑up and seeds sample data; more data can be generated via the scripts in `utils/`.
 
-1. Extend the order endpoint to find a specific order, by ID
-2. Extend the customer endpoint to find customers based on a query string to match a substring of one of the words in their name
-3. Users have complained that in production the GET endpoints can get very slow. The database is unfortunately not co-located with the application server, and there's high latency between the two. Identify if there are any optimisations that can improve performance
-4. Add a new endpoint /products to model products which appear in an order:
-      * A single order contains 1 or more products. 
-      * A product has an ID and a description. 
-      * Add a POST endpoint to create a product
-      * Add a GET endpoint to return all products, and a specific product by ID
-        * In both cases, also return a list of the order IDs which contain those products
-      * Change the orders endpoint to return a list of products contained in the order
+---
 
-# Bonus points
-1. Implement a CI pipeline on the platform of your choice to build the project and deliver it as a Dockerized image
+## Data model
 
-# Notes on the tasks
-Assume that the project represents a production application.
-Think carefully about the impact on performance when implementing your changes
-The specifications of the tasks have been left deliberately vague. You will be required to exercise judgement about what to deliver - in a real world environment, you would clarify these points in refinement, but since this is a project to be completed without interaction, feel free to make assumptions - but be prepared to defend them when asked.
-There's no CI pipeline associated with this project, but in reality there would be. Consider the things that you would expect that pipeline to verify before allowing your code to be promoted
-Feel free to refactor the codebase if necessary. Bad choices were deliberately made when creating this project.
+- **Customer** ←→ **Order** (1 : n)
+- **Order** ←→ **Product** (n : n)
+
+Circular references are broken in the DTO layer:
+
+- `CustomerDTO` contains a list of **order IDs**
+- `OrderDTO` contains a list of **product IDs** & a truncated `OrderCustomerDTO`
+
+---
+
+## REST API
+
+All endpoints are JSON and documented in `OpenAPI.yaml`.
+
+| Resource | Verb | Path             | Description     |
+| -------- | ---- | ---------------- | --------------- |
+| Customer | GET  | `/customer`      | All customers   |
+|          | GET  | `/customer/{id}` | Customer by id  |
+|          | POST | `/customer`      | Create customer |
+| Order    | GET  | `/order`         | All orders      |
+|          | GET  | `/order/{id}`    | Order by id     |
+|          | POST | `/order`         | Create order    |
+| Product  | GET  | `/products`      | All products    |
+|          | GET  | `/products/{id}` | Product by id   |
+|          | POST | `/products`      | Create product  |
+
+---
+
+## Performance / caching
+
+- The app enables **Spring Cache** backed by **Redis**.
+- Entries live for **10 minutes** (`spring.cache.redis.time‑to‑live`).
+- Keys are plain strings; values are stored as **JSON** via `GenericJackson2JsonRedisSerializer`
+- Flush the cache if the DTO structure changes:
+  ```bash
+  redis-cli FLUSHALL
+  ```
+- You can disable caching for local debugging:
+  ```bash
+  SPRING_CACHE_TYPE=none ./gradlew bootRun
+  ```
+
+---
+
+## CI / CD pipeline
+
+An example **GitHub Actions** workflow (`.github/workflows/ci.yml`) is provided. It
+
+1. Checks‑out the code.
+2. Sets up **Java 17** & Gradle.
+3. Runs unit tests: `./gradlew test`.
+4. Builds the multi‑stage Docker image defined in the project `Dockerfile`.
+5. Pushes the image to the container registry (Docker Hub or GHCR) when the branch is **main**.   Secrets required: `REGISTRY`, `REGISTRY_USERNAME`, `REGISTRY_PASSWORD`.
+
+```yaml
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Cache Gradle
+        uses: gradle/gradle-build-action@v3
+
+      - name: Test & build jar
+        run: ./gradlew clean build
+
+      - name: Build Docker image
+        run: |
+          docker build -t ${{ secrets.REGISTRY }}/store-app:${{ github.sha }} .
+
+      - name: Log in to registry
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+
+      - name: Push image
+        run: docker push ${{ secrets.REGISTRY }}/store-app:${{ github.sha }}
+```
+
+Adapt the workflow to GitLab CI, CircleCI, or Jenkins if preferred.
+
+---
+
+## Development tasks
+
+The original assignment is kept for reference. ✅ marks the parts that have already been implemented in this code‑base.
+
+1. ✅ Extend **order** endpoint to find an order by ID.
+2. ✅ Extend **customer** endpoint to search by name substring.
+3. ✅ Optimise latency with Redis caching (see above).
+4. ✅ Add **/products** endpoint and link orders ↔ products.
+5. ✅ CI pipeline builds & pushes Docker image (see above).
+

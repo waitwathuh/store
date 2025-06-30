@@ -9,11 +9,15 @@ import com.example.store.repository.CustomerRepository;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+import org.springframework.cache.annotation.CacheConfig;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Optional;
 
+@CacheConfig(cacheNames = "customers")
 @Service
 @AllArgsConstructor
 @Slf4j
@@ -22,11 +26,13 @@ public class CustomerServiceImpl implements CustomerService {
     private final CustomerRepository customerRepository;
     private final CustomerMapper customerMapper;
 
+    @Cacheable(key = "'all'")
     @Override
     public List<CustomerDTO> getAllCustomers() {
         return customerMapper.customersToCustomerDTOs(customerRepository.findAll());
     }
 
+    @Cacheable(value = "customerById", key = "#customerId")
     @Override
     public CustomerDTO getCustomerById(Long customerId) {
         Optional<Customer> customerDTO = customerRepository.findById(customerId);
@@ -40,6 +46,7 @@ public class CustomerServiceImpl implements CustomerService {
         }
     }
 
+    @CacheEvict(value = "allCustomers", allEntries = true)
     @Override
     public CustomerDTO createCustomer(Customer customer) {
         return customerMapper.customerToCustomerDTO(customerRepository.save(customer));
